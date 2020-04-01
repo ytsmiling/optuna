@@ -1,8 +1,10 @@
 import optuna
+from optuna._experimental import experimental
 from optuna import type_checking
 
 if type_checking.TYPE_CHECKING:
     from typing import Dict  # NOQA
+    from typing import Optional  # NOQA
 
 try:
     import mlflow
@@ -19,18 +21,18 @@ def _check_mlflow_availability():
 
     if not _available:
         raise ImportError(
-            "MLflow is not available. Please install MLflow to use this "
-            "feature. It can be installed by executing `$ pip install "
-            "mlflow`. For further information, please refer to the installation guide "
-            "of MLflow. (The actual import error is as follows: " + str(_import_error) + ")"
+            "MLflow is not available. Please install MLflow to use this feature. It can be "
+            "installed by executing `$ pip install mlflow`. For further information, please "
+            "refer to the installation guide of MLflow. (The actual import error is as "
+            "follows: " + str(_import_error) + ")"
         )
 
 
+@experimental("1.5.0")
 class MLflowCallback(object):
     """Callback to track optuna trials with MLflow.
 
-    This callback adds relevant information that is
-    tracked by Optuna to MLflow.
+    This callback adds relevant information that is tracked by Optuna to MLflow.
 
     Example:
 
@@ -73,30 +75,22 @@ class MLflowCallback(object):
 
     Args:
         tracking_uri:
-            Set the tracking server URI.
+            The tracking server URI of MLflow. See the reference of `mlflow.set_tracking_uri
+            <https://www.mlflow.org/docs/latest/python_api/mlflow.html#mlflow.set_tracking_uri>`_
+            for more details.
 
-            - An empty string, or a local directory path, prefixed with ``file:``. Data is stored
-              locally in the provided directory (or ``./mlruns`` if empty).
-            - An HTTP URI like ``https://my-tracking-server:5000``.
-            - A Databricks workspace, provided as the string ``databricks`` or, to use a
-              Databricks CLI.
-              `profile <https://github.com/databricks/databricks-cli#installation>`_,
-              ``databricks://<profileName>``.
         experiment:
-            Name of MLflow experiment to be activated. If not set ``study.study_name``
-            will be taken. Either ``experiment`` or ``study.study_name`` must be set.
-        metric_name:
-            Name of the metric. If not provided this will be called ``trial_value``.
+            Name of MLflow experiment to be activated. If not set ``study.study_name`` will be
+            taken.
     """
 
-    def __init__(self, tracking_uri=None, experiment=None, metric_name=None):
-        # type: (str, str, str) -> None
+    def __init__(self, tracking_uri=None, experiment=None):
+        # type: (Optional[str], Optional[str]) -> None
 
         _check_mlflow_availability()
 
         self._tracking_uri = tracking_uri
         self._experiment = experiment
-        self._metric_name = metric_name
 
     def __call__(self, study, trial):
         # type: (optuna.study.Study, optuna.structs.FrozenTrial) -> None
@@ -108,34 +102,33 @@ class MLflowCallback(object):
         # This sets the experiment of MLflow.
         if self._experiment is not None:
             mlflow.set_experiment(self._experiment)
-        elif (
-            study.study_name is not None
-            and study.study_name != "no-name-00000000-0000-0000-0000-000000000000"
-        ):
-            mlflow.set_experiment(study.study_name)
         else:
-            raise ValueError("Either 'experiment' or 'study.study_name' must be set!")
+            mlflow.set_experiment(study.study_name)
 
         with mlflow.start_run(run_name=trial.number):
 
             # This sets the metric for MLflow.
             trial_value = trial.value if trial.value is not None else float("nan")
-            metric_name = self._metric_name if self._metric_name is not None else "trial_value"
-            mlflow.log_metric(metric_name, trial_value)
+            mlflow.log_metric('value', trial_value)
 
             # This sets the params for MLflow.
             mlflow.log_params(trial.params)
 
             # This sets the tags for MLflow.
             tags = {}  # type: Dict[str, str]
-            tags["trial_number"] = str(trial.number)
-            tags["trial_datetime_start"] = str(trial.datetime_start)
-            tags["trial_datetime_complete"] = str(trial.datetime_complete)
-            tags["trial_state"] = str(trial.state)
-            tags["study_direction"] = str(study.direction)
+            tags["number"] = str(trial.number)
+            tags["datetime_start"] = str(trial.datetime_start)
+            tags["datetime_complete"] = str(trial.datetime_complete)
+            # todo: change state name to human readable one
+            tags["state"] = str(trial.state)
+            tags["direction"] = str(study.direction)
             tags.update(trial.user_attrs)
+            # todo: change distribution name to human readable one
             distributions = {
                 (k + "_distribution"): str(v) for (k, v) in trial.distributions.items()
             }
             tags.update(distributions)
+
+            # todo: set user attribute
+
             mlflow.set_tags(tags)
