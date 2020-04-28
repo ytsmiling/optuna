@@ -273,3 +273,6 @@ class BaseStorage(object, metaclass=abc.ABCMeta):
             raise RuntimeError(
                 "Trial#{} has already finished and can not be updated.".format(trial.number)
             )
+
+    def load(self, study_id: int) -> None:
+        pass

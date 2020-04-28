@@ -689,6 +689,7 @@ class Study(BaseStudy):
     ):
         # type: (...) -> trial_module.Trial
 
+        self._storage.load(self._study_id)
         trial_id = self._pop_waiting_trial_id()
         if trial_id is None:
             trial_id = self._storage.create_new_trial(self._study_id)
